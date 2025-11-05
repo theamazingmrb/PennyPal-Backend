@@ -1,87 +1,97 @@
+
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.renderers import JSONRenderer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.authtoken.models import Token
-from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from django.contrib.auth.models import User 
+from django.db.models.functions import TruncMonth, Coalesce
+from django.db import models
+from django.db.models import Sum, F, Value as V, DecimalField
+from calendar import monthrange
+from datetime import date, datetime
+from rest_framework.decorators import api_view, permission_classes
+from accounts.models import Profile, Category, Transaction, Calendar, CalendarCell, BillDue
 from .serializers import (
-    RegisterSerializer,
-    LoginSerializer,
     ProfileSerializer,
     CategorySerializer,
     CalendarSerializer,
-    CalendarCellSerializer,
     BillDueSerializer,
+    TransactionSerializer,
+    UserSerializer,
 )
-from accounts.models import Profile, Category, Transaction, Calendar, CalendarCell, BillDue
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from calendar import monthrange
-from datetime import date, datetime
-from django.db.models.functions import TruncMonth, Coalesce
-from django.db.models import Sum, F, Value as V, DecimalField
-from django.db import models
+from accounts.api.serializers import CategorySerializer  # make sure already imported
 
 
-# -------------------- PROFILE & USER VIEWS -----------------------------------------------------------------------
-class ProfileListView(generics.ListAPIView):
-    """List all user profiles (admin or debugging only)."""
-    queryset = Profile.objects.all()
-    serializer_class = ProfileSerializer
-
+# -------------------- PROFILE & USER VIEWS --------------------
 
 class UserProfileView(generics.RetrieveAPIView):
-    """Returns the profile of the current authenticated user."""
-    queryset = Profile.objects.all()
-    serializer_class = ProfileSerializer
+    serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
 
     def get_object(self):
-        return self.request.user.profile
+        return self.request.user
 
-
-class ProfileUpdateView(generics.RetrieveUpdateAPIView):
-    """Allows the user to update their profile info."""
-    queryset = Profile.objects.all()
-    serializer_class = ProfileSerializer
+class ProfileUpdateView(generics.UpdateAPIView):
+    serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
 
     def get_object(self):
-        return self.request.user.profile
+        return self.request.user
 
-# -------------------- CATEGORY --------------------------------------------------------------------
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)  
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+class DeleteAccountView(generics.DestroyAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    def get_object(self):
+        return self.request.user
+
+
+# -------------------- CATEGORIES --------------------
 class CategoryListCreateView(generics.ListCreateAPIView):
-    """Create and list user-specific categories."""
+   
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [TokenAuthentication]
 
     def get_queryset(self):
-        return Category.objects.filter(user=self.request.user)
+        return Category.objects.filter(user=self.request.user).order_by('name')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-# -------------------- TRANSACTIONS ----------------------------------------------------------------
+
+# -------------------- TRANSACTIONS (helpers) --------------------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
 def total_expenses(request):
-    """Return total expense amount for the logged-in user."""
-    total = Transaction.objects.filter(user=request.user, type='expense').aggregate(Sum('amount'))
+    
+    total = (
+        Transaction.objects
+        .filter(user=request.user, type='expense')
+        .aggregate(Sum('amount'))
+    )
     return Response({"total_expenses": total['amount__sum'] or 0})
 
-# -------------------- MONTHLY SUMMARY --------------------------------------------------------------
+
+# -------------------- MONTHLY SUMMARY --------------------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
 def monthly_summary(request):
-    """Return monthly income, expenses, and balance summary."""
+    
     user = request.user
-
     transactions = (
         Transaction.objects
         .filter(user_id=user.id)
@@ -91,26 +101,26 @@ def monthly_summary(request):
             total_income=Coalesce(
                 Sum('amount', filter=models.Q(type='income')),
                 V(0),
-                output_field=DecimalField()
+                output_field=DecimalField(max_digits=12, decimal_places=2)
             ),
             total_expenses=Coalesce(
                 Sum('amount', filter=models.Q(type='expense')),
                 V(0),
-                output_field=DecimalField()
+                output_field=DecimalField(max_digits=12, decimal_places=2)
             )
         )
         .annotate(net_balance=F('total_income') - F('total_expenses'))
         .order_by('-month')
     )
-
     return Response(transactions)
 
-# -------------------- DAY VIEW --------------------------------------------------------------------
+
+# -------------------- DAY VIEW --------------------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
 def day_view(request, calendar_id, date_str):
-    """View details (transactions + bills) for a specific date."""
+    
     try:
         calendar = Calendar.objects.get(id=calendar_id, user=request.user)
     except Calendar.DoesNotExist:
@@ -125,86 +135,147 @@ def day_view(request, calendar_id, date_str):
     bills = BillDue.objects.filter(user=request.user, due_date=target_date)
 
     total_expenses = transactions.filter(type='expense').aggregate(Sum('amount'))['amount__sum'] or 0
-    total_income = transactions.filter(type='income').aggregate(Sum('amount'))['amount__sum'] or 0
-    net_balance = total_income - total_expenses
+    total_income   = transactions.filter(type='income').aggregate(Sum('amount'))['amount__sum'] or 0
+    net_balance    = total_income - total_expenses
 
     return Response({
         "date": target_date,
-        "transactions": list(transactions.values('id', 'type', 'amount', 'category__name', 'description')),
-        "bills": list(bills.values('id', 'name', 'amount', 'due_date')),
+        "transactions": list(
+            transactions.values('id', 'type', 'amount', 'category__name', 'description', 'date')
+        ),
+        "bills": list(
+            bills.values('id', 'name', 'amount', 'type', 'note', 'due_date', 'is_paid')
+        ),
         "total_expenses": total_expenses,
         "total_income": total_income,
         "net_balance": net_balance,
     })
 
-# -------------------- ANNUAL SUMMARY ---------------------------------------------------------------
+# -------------------- ANNUAL SUMMARY --------------------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
 def annual_summary(request):
-    """Return total income, expenses, and net balance for the whole year."""
     user = request.user
-    year = request.query_params.get('year', datetime.now().year)
+    year = int(request.query_params.get("year", datetime.now().year))
 
-    transactions = (
-        Transaction.objects
-        .filter(user=user, date__year=year)
-        .values('category__name')
-        .annotate(
-            total_expenses=Coalesce(
-                Sum('amount', filter=models.Q(type='expense')),
-                V(0),
-                output_field=DecimalField()
-            ),
-            total_income=Coalesce(
-                Sum('amount', filter=models.Q(type='income')),
-                V(0),
-                output_field=DecimalField()
-            )
-        )
-        .annotate(net_balance=F('total_income') - F('total_expenses'))
-        .order_by('-total_expenses')
-    )
+    transactions = Transaction.objects.filter(user=user, date__year=year)
+    bills = BillDue.objects.filter(user=user, due_date__year=year)
 
-    total_income_all = sum(t["total_income"] for t in transactions)
-    total_expenses_all = sum(t["total_expenses"] for t in transactions)
-    net_balance_all = total_income_all - total_expenses_all
+    total_income = transactions.filter(type="income").aggregate(Sum("amount"))["amount__sum"] or 0
+    total_expenses = transactions.filter(type="expense").aggregate(Sum("amount"))["amount__sum"] or 0
+    total_bills = bills.aggregate(Sum("amount"))["amount__sum"] or 0
+
+    total_balance = total_income - total_expenses - total_bills
 
     return Response({
         "year": year,
-        "categories": list(transactions),
-        "total_income": total_income_all,
-        "total_expenses": total_expenses_all,
-        "net_balance": net_balance_all
+        "total_income": total_income,
+        "total_expenses": total_expenses,
+        "total_bills": total_bills,
+        "total_balance": total_balance,
     })
 
-
-# -------------------- CALENDAR ---------------------------------------------------------------------
+# -------------------- CALENDAR --------------------
 class CalendarListCreateView(generics.ListCreateAPIView):
-    """List all user calendars or create a new one."""
+   
     serializer_class = CalendarSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [TokenAuthentication]
 
     def get_queryset(self):
-        return Calendar.objects.filter(user=self.request.user)
+        qs = Calendar.objects.filter(user=self.request.user).order_by('-year', '-month')
+        month = self.request.query_params.get('month')
+        year = self.request.query_params.get('year')
+        if month and year:
+            qs = qs.filter(month=month, year=year)
+        return qs
 
     def perform_create(self, serializer):
-        calendar = serializer.save(user=self.request.user)
-        _, num_days = monthrange(calendar.year, calendar.month)
+        month = self.request.data.get('month')
+        year  = self.request.data.get('year')
+        if not month or not year:
+            raise ValueError("month and year are required.")
+
+        existing = Calendar.objects.filter(user=self.request.user, month=month, year=year).first()
+        if existing:
+            return  
+
+        calendar = serializer.save(user=self.request.user, month=month, year=year)
+
+        _, num_days = monthrange(int(year), int(month))
         for day in range(1, num_days + 1):
-            CalendarCell.objects.create(calendar=calendar, date=date(calendar.year, calendar.month, day))
+            CalendarCell.objects.get_or_create(
+                calendar=calendar,
+                date=date(int(year), int(month), day)
+            )
 
 
-# -------------------- BILLS ------------------------------------------------------------------------
+# -------------------- BILLS --------------------
 class BillDueListCreateView(generics.ListCreateAPIView):
-    """List or create bills due for the current user."""
+    
     serializer_class = BillDueSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [TokenAuthentication]
 
     def get_queryset(self):
-        return BillDue.objects.filter(user=self.request.user).order_by('due_date')
+        qs = BillDue.objects.filter(user=self.request.user).order_by('due_date')
+        # Optional: filter by month/year to help the calendar page
+        month = self.request.query_params.get('month')
+        year = self.request.query_params.get('year')
+        if month and year:
+            qs = qs.filter(due_date__year=year, due_date__month=month)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+class BillDueDetailView(generics.RetrieveUpdateDestroyAPIView):
+    
+    serializer_class = BillDueSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    def get_queryset(self):
+        return BillDue.objects.filter(user=self.request.user)
+    
+# -------------------- TRANSACTION DETAIL --------------------
+class TransactionDetailView(generics.RetrieveUpdateDestroyAPIView):
+
+    serializer_class = TransactionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    def get_queryset(self):
+        return Transaction.objects.filter(user=self.request.user)
+    
+# -------------------- MONTHLY PIE DATA FOR FRONTEND --------------------
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def monthly_pie_data(request):
+    """Return monthly totals of income, expenses, and bills for the current year."""
+    user = request.user
+    year = int(request.query_params.get('year', datetime.now().year))
+
+    monthly_data = []
+    for month in range(1, 13):
+        transactions = Transaction.objects.filter(user=user, date__year=year, date__month=month)
+        bills = BillDue.objects.filter(user=user, due_date__year=year, due_date__month=month)
+
+        total_income = transactions.filter(type='income').aggregate(Sum('amount'))['amount__sum'] or 0
+        total_expenses = transactions.filter(type='expense').aggregate(Sum('amount'))['amount__sum'] or 0
+        total_bills = bills.aggregate(Sum('amount'))['amount__sum'] or 0
+
+        if total_income > 0 or total_expenses > 0 or total_bills > 0:
+            monthly_data.append({
+                "month": month,
+                "total_income": total_income,
+                "total_expenses": total_expenses,
+                "total_bills": total_bills,
+            })
+
+    return Response({
+        "year": year,
+        "months": monthly_data
+    })
