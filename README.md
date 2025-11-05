@@ -4,7 +4,7 @@
 
 ### Your Personal Finance Calendar App
 
-![pennypal}(https://i.imgur.com/LzPdscp.jpeg)
+![pennypal](https://i.imgur.com/LzPdscp.jpeg)
 
 ---
 
