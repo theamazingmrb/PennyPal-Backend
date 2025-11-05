@@ -4,6 +4,8 @@
 
 ### Your Personal Finance Calendar App
 
+![pennypal}(https://i.imgur.com/LzPdscp.jpeg)
+
 ---
 
 ##  **WHY?**
@@ -19,9 +21,10 @@
 
 ##  **MVP User Stories**
 - As a new user, I want to **sign up** with name, email, password, and password confirmation so I can create an account.  
-- As a registered user, I want to **sign in** so I can access my personal dashboard and calendar.  
-- As a user, I want to **log out securely**.  
-- As a user, I want to **create a new monthly calendar** by entering a month and year so I can track my finances.  
+- As a registered user, I want to **sign in** securely so I can access my financial tools.
+- As a user, I want to **log out securely**. 
+- As a user, I want to **delete my account** if I no longer wish to use the app. 
+- As a user, I want to **create a monthly calendar** by selecting a month and year to track my finances.  
 - As a user, I want to **view my full monthly calendar** to see daily spendings, bills, and credit dues.  
 - As a user, I want to **click a day** on my calendar to see detailed spendings and due dates for that day.  
 - As a user, I want to **navigate between months** to review past or upcoming spendings.  
@@ -31,40 +34,44 @@
 - As a user, I want to **add bills due dates** so I don’t forget payments.  
 - As a user, I want to **add credit card due dates** to stay on top of payments.  
 - As a user, I want to **see my due dates directly on my calendar** with color-coded markers.  
-- As a user, I want to **view my monthly summary in a bar chart** to visualize total spendings, bills, and credit payments.  
-- As a user, I want to **see my annual summary in a pie chart** showing yearly spending categories.  
-- As a user, I want to **analyze my spending habits** through charts for better financial control.  
+- As a user, I want to **navigate between months** to review past or upcoming financial activity. 
+- As a user, I want to **view a Monthly Summary page with a pie chart** showing income, expenses, and bills.  
+- As a user, I want to **view an Annual Summary page with a pie chart** that visualizes my yearly totals 
 
 ---
 
 ##  **Wireframes**
-1. **Landing Page** – Logo + “Sign Up” / “Sign In” buttons  
+1. **Welcome Page** – Logo + “Sign Up” / “Sign In” buttons  
 2. **Sign Up Page**  
 3. **Sign In Page**  
 4. **Calendar Page** – Monthly grid with bills, credit, spendings  
-5. **Day Details Page** – Table with spending list and add form  
-6. **Monthly Summary Page** – Bar chart  
-7. **Annual Summary Page** – Pie chart  
+5. **Day Details Page** – Table with spending, bills, income with "Edite" / "Delete" / "Add" buttons  
+6. **Monthly Summary Page** – Pie chart chart  
+7. **Annual Summary Page** – Pie chart 
+8. **Profile Page** - User information with "Edit" / "Delete" buttons
 
 ---
 
-##  **API Endpoints**
-| Endpoint | Method | Function | Description |
-|-----------|--------|-----------|--------------|
-| `/api/signup/` | POST | CreateUser | Register new user |
-| `/api/login/` | POST | LoginUser | Authenticate user |
-| `/api/logout/` | GET | LogoutUser | End session |
-| `/api/calendar/` | GET | CalendarList | Get user calendars |
-| `/api/calendar/create/` | POST | CalendarCreate | Add new calendar |
-| `/api/calendar/<id>/` | GET | CalendarDetail | View one calendar |
-| `/api/calendar/<id>/cell/<date>/` | GET | CellDetail | View spendings + dues for a date |
-| `/api/entry/` | POST | EntryCreate | Add new spending |
-| `/api/entry/<id>/edit/` | PUT | EntryUpdate | Edit spending |
-| `/api/entry/<id>/delete/` | DELETE | EntryDelete | Delete spending |
-| `/api/summary/monthly/` | GET | MonthlySummary | Return monthly totals |
-| `/api/summary/annual/` | GET | AnnualSummary | Return annual totals |
+## API Endpoints
 
----
+| Endpoint                                 | Method        | Function                     |Description                                           | 
+|------------------------------------------|---------------|------------------------------|-------------------------------------------------------
+| /api/signup/                             | POST          | CreateUser                   | Register newuser                                     |
+| /api/signin/                             | POST          | LoginUser                    | Authenticate user and return token                   |
+| /api/logout/                             | GET           | LogoutUser                   | Log out and invalidate current token                 |
+| /api/profile/                            | GET           | UserProfileView              | Retrieve logged-in user profile                      |
+| /api/profile/update/                     | PUT           | ProfileUpdateView            | Update first name, last name, or email               |
+| /api/profile/delete/                     | DELETE        | DeleteAccountView            | Permanently delete user account                      |
+| /api/calendar/?month=&year=              | GET           | CalendarListView             | Get or create calendar for selected month/year       |
+| /api/calendar/<calendar_id>/day/<date>/  | GET           | DayView                      | View transactions & bills for a specific date        |
+| /api/transactions/                       | GET / POST    | TransactionListCreateView    | Retrieve or add income/expense                       |
+| /api/transactions/<id>/                  | PUT / DELETE  | TransactionDetailView        | Edit or delete a transaction                         |
+| /api/bills/                              | GET / POST    | BillListCreateView           | Retrieve or add bills                                |
+| /api/bills/<id>/                         | PUT / DELETE  | BillDetailView               | Edit or delete a bill                                |
+| /api/monthly-pie-data/                   | GET           | MonthlyPieDataView           | Data for monthly pie chart (income, expenses, bills) |
+| /api/summary/monthly/                    | GET           | MonthlySummaryView           | Monthly totals (income, expenses, bills, balance)    |
+| /api/summary/annual/                     | GET           | AnnualSummaryView            | Yearly totals (income, expenses, bills, balance)     | 
+
 
 ##  **Database Schema**
 ###  User
@@ -74,6 +81,50 @@
 | username | CharField | — | Required, unique |
 | email | EmailField | — | User’s email |
 | password | CharField | — | Encrypted password |
+| password2 | CharField | - | Password confirmation (used only during sign-up) |
+| first_name | CharField | - | User’s first name |
+| last-name | Chart Field | - | User’s last name |
+
+
+### Profile
+| Field | Type | Relationship | Notes |
+|--------|------|---------------|--------|
+| id | AutoField | Primary Key | — |
+| user | One-to-One(User) | Each profile belongs to one user |
+
+
+### Category
+| Field | Type | Relationship | Notes |
+|--------|------|---------------|--------|
+| id | AutoField | Primary Key | — |
+| user | ForeignKey(User) | One-to-Many | Each user can have multiple categories |
+| name | CharField | — | Example: “Groceries” |
+
+
+###  Transaction
+| Field | Type | Relationship | Notes |
+|--------|------|---------------|--------|
+| id | AutoField | Primary Key | — |
+| uses | ForeignKey(User) | One-to-Many | Each Transaction belongs to one user |
+| category | CharField | — | Example: “Groceries”, “Transport” |
+| type | CharField | — | Enter "income" or "expenses" |
+| amount | DecimalField | — | Amount of transaction |
+| date | DateField | - | Transaction date |
+| description | TextField | — | Optional |
+
+
+###  BillDue
+| Field | Type | Relationship | Notes |
+|--------|------|---------------|--------|
+| id | AutoField | Primary Key | — |
+| user | ForeignKey(User) | One-to-Many | Each bill belongs to one user |
+| name | CharField | — | Example: “Rent”, “Electricity” |
+| amount | DecimalField | — | Bill Amount |
+| due_date | DateField | — | Bill due date |
+| note | TextField | — | Optional |
+| type | CharField | — | Bill category(Optional) |
+| is-paid | BooleanField | — | Mark bill as paid or unpaid |
+
 
 ###  Calendar
 | Field | Type | Relationship | Notes |
@@ -83,6 +134,7 @@
 | month | CharField | — | Example: “January” |
 | year | IntegerField | — | Example: 2025 |
 
+
 ###  CalendarCell
 | Field | Type | Relationship | Notes |
 |--------|------|---------------|--------|
@@ -90,56 +142,30 @@
 | calendar | ForeignKey(Calendar) | One-to-Many | Each cell belongs to one calendar |
 | date | DateField | — | Represents a single day |
 | net_balance | DecimalField | — | Optional, calculated dynamically |
+| total-expences | DecimalField | — | Calendar from transaction |
+| total-income | DecimalField | — | Calendar from transaction |
 
-###  Entry
-| Field | Type | Relationship | Notes |
-|--------|------|---------------|--------|
-| id | AutoField | Primary Key | — |
-| calendar_cell | ForeignKey(CalendarCell) | One-to-Many | Each entry belongs to a day |
-| category | CharField | — | Example: “Groceries”, “Transport” |
-| amount | DecimalField | — | Amount spent |
-| note | TextField | — | Optional |
-| created_at | DateTimeField | — | Auto timestamp |
-
-###  BillDue
-| Field | Type | Relationship | Notes |
-|--------|------|---------------|--------|
-| id | AutoField | Primary Key | — |
-| calendar_cell | ForeignKey(CalendarCell) | One-to-Many | Each bill belongs to a day |
-| name | CharField | — | Example: “Rent”, “Electricity” |
-| amount | DecimalField | — | Amount due |
-| due_date | DateField | — | Bill due date |
-| note | TextField | — | Optional |
-
-###  CreditDue
-| Field | Type | Relationship | Notes |
-|--------|------|---------------|--------|
-| id | AutoField | Primary Key | — |
-| calendar_cell | ForeignKey(CalendarCell) | One-to-Many | Each credit belongs to a day |
-| card_name | CharField | — | Example: “Amex”, “Chase” |
-| amount | DecimalField | — | Amount due |
-| due_date | DateField | — | Credit due date |
-| note | TextField | — | Optional |
 
 ###  Summaries (Calculated)
 | Summary Type | Data Source | Description |
 |---------------|--------------|--------------|
-| WeeklySummary | Entries + Bills + CreditDues | Aggregates totals by week |
-| MonthlySummary | Entries + Bills + CreditDues | Aggregates totals by month |
-| AnnualSummary | Entries grouped by category | Aggregates yearly spending |
+| MonthlySummary | Transactions + Bills | Aggregates totals by month |
+| AnnualSummary | Transactions + Bills | Aggregates yearly spending |
+| Monthky Pie | Transactions + Bills | Provides data for monthly chart visualizations |
 
 ---
 
 ##  Entity Relationships
 | Entity | Description | Relationship |
 |--------|--------------|---------------|
-| User | Registered person | Has many Calendars |
-| Calendar | Represents month/year | Belongs to one User |
-| CalendarCell | Represents a day | Belongs to one Calendar |
-| Entry | Spending record | Belongs to one CalendarCell |
-| BillDue | Bill payment | Belongs to one CalendarCell |
-| CreditDue | Credit card payment | Belongs to one CalendarCell |
-| Summaries | Calculated | Generated via queries |
+| User | Registered person | Has one Profile |
+| Profile | User Details | Belong to one user |
+| Calendar | Monthly tracker | Belongs to one User |
+| CalendarCell | Daily tracker | Belongs to one Calendar |
+| Transaction | Income/Expenses record | Belongs to one User |
+| BillDue | Bill or payment due | Belongs to one User |
+| Category | User-defined transaction category | Belongs to one User |
+| Summaries | Calculated | Drived from transactions and bills |
 
 ---
 
