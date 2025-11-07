@@ -42,7 +42,7 @@ else:
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 SECRET_KEY = os.environ.get("SECRET_KEY", "fallback-key-for-local-dev")
 
-ALLOWED_HOSTS = ['pennypal-backend-app-d2ad747d3bfd.herokuapp.com', 'localhost', '127.0.0.1', '[::1]']
+ALLOWED_HOSTS = ['https://pennypal-frontend.netlify.app', 'localhost', '127.0.0.1', '[::1]']
 
 # ------------------------
 # Installed Apps

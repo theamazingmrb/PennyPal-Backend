@@ -1,3 +1,5 @@
+
+
 from django.urls import path
 from accounts.api.auth_views import RegisterView, SignInView
 from accounts.api.views import (
