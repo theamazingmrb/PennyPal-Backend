@@ -44,7 +44,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "fallback-key-for-local-dev")
 
 ALLOWED_HOSTS = ['https://pennypal-frontend.netlify.app', 'localhost', '127.0.0.1', '[::1]']
 
-CORS_ALLOWED_ORIGINS = ['https://pennypal-frontend.netlify.app', 'localhost', '127.0.0.1', '[::1]']
+CORS_ALLOW_ALL_ORIGINS = True
 
 # ------------------------
 # Installed Apps
