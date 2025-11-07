@@ -42,7 +42,7 @@ else:
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 SECRET_KEY = os.environ.get("SECRET_KEY", "fallback-key-for-local-dev")
 
-ALLOWED_HOSTS = ['https://pennypal-frontend.netlify.app', 'localhost', '127.0.0.1', '[::1]']
+ALLOWED_HOSTS = ['https://pennypal-frontend.netlify.app', "https://test-pennypal-38a9db90f210.herokuapp.com/admin", 'localhost', '127.0.0.1', '[::1]']
 
 CORS_ALLOW_ALL_ORIGINS = True
 
@@ -149,5 +149,6 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://pennypal-frontend.herokuapp.com",
+    "https://test-pennypal-38a9db90f210.herokuapp.com"
 ]
 CORS_ALLOW_CREDENTIALS = True
